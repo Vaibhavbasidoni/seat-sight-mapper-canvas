@@ -7,27 +7,9 @@ import { OccupancyControls } from '@/components/OccupancyControls';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Upload, Camera } from "lucide-react";
+import { Upload, Camera, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-
-// Initial JSON data structure
-const initialData = {
-  entities: [
-    { id: 1, name: "Cinema Complex A" },
-    { id: 2, name: "Cinema Complex B" }
-  ],
-  halls: [
-    { id: 1, name: "Hall 1", entityId: 1 },
-    { id: 2, name: "Hall 2", entityId: 1 },
-    { id: 3, name: "Hall 3", entityId: 2 }
-  ],
-  cameras: [
-    { id: 1, name: "Camera 1", hallId: 1 },
-    { id: 2, name: "Camera 2", hallId: 1 },
-    { id: 3, name: "Camera 3", hallId: 2 },
-    { id: 4, name: "Camera 4", hallId: 3 }
-  ]
-};
+import { useEntitiesData } from '@/hooks/useEntitiesData';
 
 export interface Seat {
   number: number;
@@ -45,47 +27,45 @@ export interface Row {
 }
 
 export interface CameraData {
-  id: number;
+  id: string;
   name: string;
-  hallId: number;
+  hallId: string;
   rows: Row[];
   hallImage: string | null;
 }
 
 const Index = () => {
+  const { data: apiData, isLoading, error } = useEntitiesData();
   const [selectedEntity, setSelectedEntity] = useState<string>("");
   const [selectedHall, setSelectedHall] = useState<string>("");
   const [selectedCamera, setSelectedCamera] = useState<string>("");
-  const [availableHalls, setAvailableHalls] = useState(initialData.halls);
-  const [availableCameras, setAvailableCameras] = useState(initialData.cameras);
+  const [availableHalls, setAvailableHalls] = useState<any[]>([]);
+  const [availableCameras, setAvailableCameras] = useState<any[]>([]);
   const [cameraData, setCameraData] = useState<CameraData | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentDrawingRow, setCurrentDrawingRow] = useState<string>("");
   const [currentSeatIndex, setCurrentSeatIndex] = useState(0);
 
   useEffect(() => {
-    if (selectedEntity) {
-      const entityId = parseInt(selectedEntity);
-      const filteredHalls = initialData.halls.filter(hall => hall.entityId === entityId);
+    if (selectedEntity && apiData) {
+      const filteredHalls = apiData.halls.filter(hall => hall.entityId === selectedEntity);
       setAvailableHalls(filteredHalls);
       setSelectedHall("");
       setSelectedCamera("");
     }
-  }, [selectedEntity]);
+  }, [selectedEntity, apiData]);
 
   useEffect(() => {
-    if (selectedHall) {
-      const hallId = parseInt(selectedHall);
-      const filteredCameras = initialData.cameras.filter(camera => camera.hallId === hallId);
+    if (selectedHall && apiData) {
+      const filteredCameras = apiData.cameras.filter(camera => camera.hallId === selectedHall);
       setAvailableCameras(filteredCameras);
       setSelectedCamera("");
     }
-  }, [selectedHall]);
+  }, [selectedHall, apiData]);
 
   useEffect(() => {
-    if (selectedCamera) {
-      const cameraId = parseInt(selectedCamera);
-      const camera = initialData.cameras.find(c => c.id === cameraId);
+    if (selectedCamera && apiData) {
+      const camera = apiData.cameras.find(c => c.id === selectedCamera);
       if (camera) {
         setCameraData({
           id: camera.id,
@@ -97,7 +77,7 @@ const Index = () => {
         toast.success(`Camera ${camera.name} selected`);
       }
     }
-  }, [selectedCamera]);
+  }, [selectedCamera, apiData]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -237,6 +217,25 @@ const Index = () => {
     toast.success(`Occupancy calculated: ${occupiedSeats}/${totalSeats} seats occupied`);
   };
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+        <Card className="p-6 max-w-md">
+          <div className="flex items-center gap-2 text-red-600 mb-2">
+            <AlertCircle className="w-5 h-5" />
+            <h2 className="text-lg font-semibold">Error Loading Data</h2>
+          </div>
+          <p className="text-gray-600 mb-4">
+            Failed to fetch entities data from the server. Please check your connection and try again.
+          </p>
+          <Button onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -250,29 +249,35 @@ const Index = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Entity</label>
-              <Select value={selectedEntity} onValueChange={setSelectedEntity}>
+              <Select value={selectedEntity} onValueChange={setSelectedEntity} disabled={isLoading}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select Entity" />
+                  <SelectValue placeholder={isLoading ? "Loading..." : "Select Entity"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {initialData.entities.map(entity => (
-                    <SelectItem key={entity.id} value={entity.id.toString()}>
-                      {entity.name}
-                    </SelectItem>
-                  ))}
+                  {isLoading ? (
+                    <div className="flex items-center justify-center p-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </div>
+                  ) : (
+                    apiData?.entities.map(entity => (
+                      <SelectItem key={entity.id} value={entity.id}>
+                        {entity.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Hall</label>
-              <Select value={selectedHall} onValueChange={setSelectedHall} disabled={!selectedEntity}>
+              <Select value={selectedHall} onValueChange={setSelectedHall} disabled={!selectedEntity || isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select Hall" />
                 </SelectTrigger>
                 <SelectContent>
                   {availableHalls.map(hall => (
-                    <SelectItem key={hall.id} value={hall.id.toString()}>
+                    <SelectItem key={hall.id} value={hall.id}>
                       {hall.name}
                     </SelectItem>
                   ))}
@@ -282,13 +287,13 @@ const Index = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Camera</label>
-              <Select value={selectedCamera} onValueChange={setSelectedCamera} disabled={!selectedHall}>
+              <Select value={selectedCamera} onValueChange={setSelectedCamera} disabled={!selectedHall || isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select Camera" />
                 </SelectTrigger>
                 <SelectContent>
                   {availableCameras.map(camera => (
-                    <SelectItem key={camera.id} value={camera.id.toString()}>
+                    <SelectItem key={camera.id} value={camera.id}>
                       {camera.name}
                     </SelectItem>
                   ))}
